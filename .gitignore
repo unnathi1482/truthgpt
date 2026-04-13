@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+
+# Virtual env (DO NOT COMMIT - very large)
+.venv/
+venv/
+env/
+
+# Env secrets (NEVER commit real keys)
+.env
+
+# Jupyter / editor
+.ipynb_checkpoints/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Lock file (local only)
+requirements.lock.txt
+
+# Hugging Face model cache (large, auto-downloaded)
+*.safetensors
+*.bin
+*.ot
+
+# Test artifacts
+*.log
