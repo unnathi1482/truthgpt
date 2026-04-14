@@ -22,6 +22,10 @@ def _needs_random_fact_mode(prompt: str) -> bool:
 
 def get_groq_client() -> Groq:
     api_key = os.getenv("GROQ_API_KEY")
+
+    # Safe debug: prints only presence + length (never prints the key itself)
+    print("GROQ_API_KEY loaded:", bool(api_key), "len:", (len(api_key) if api_key else 0))
+
     if not api_key:
         raise RuntimeError(
             "GROQ_API_KEY is missing. Add it to your .env file (do not commit .env)."
@@ -89,6 +93,9 @@ def generate_answer(
             return resp.choices[0].message.content.strip()
 
         except Exception as e:
+            # Safe debug: prints error type/message (no secrets)
+            print(f"Groq error attempt {attempt}/{max_retries}: {type(e).__name__}: {e}")
+
             last_err = e
             if attempt < max_retries and _is_retryable_groq_error(e):
                 # exponential backoff: 1s, 2s, 4s...
@@ -97,5 +104,4 @@ def generate_answer(
                 continue
             raise
 
-    # Shouldn't reach here, but just in case:
     raise last_err if last_err else RuntimeError("Groq request failed.")
