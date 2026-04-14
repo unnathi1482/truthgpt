@@ -24,18 +24,14 @@ if submitted:
         try:
             out = run_pipeline(question, max_claims=6, evidence_per_source=3)
         except Exception as e:
-            err_type = type(e).__name__
-
-            # Groq SDK error class names (handled by name to avoid extra imports)
-            if err_type in ("APIConnectionError", "APITimeoutError"):
-                st.error(
-                    "The LLM provider (Groq) is temporarily unreachable from the server. "
-                    "Please try again in a few seconds."
-                )
-            else:
-                st.error(f"Error: {err_type}: {e}")
-
+            st.error(f"Unexpected error: {type(e).__name__}: {e}")
             st.stop()
+
+    if getattr(out, "used_fallback", False):
+        st.warning(
+            "LLM is currently unavailable from this server. "
+            "Showing an evidence-based answer (Wikipedia) instead."
+        )
 
     st.subheader("Answer")
     st.markdown(format_answer_for_display(out.answer))

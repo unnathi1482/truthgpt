@@ -5,6 +5,7 @@ from typing import List, Set
 import re
 
 from truthgpt.llm import generate_answer
+from truthgpt.fallback_answer import fallback_answer_from_evidence
 from truthgpt.claims import extract_claims
 from truthgpt.search import Evidence, gather_evidence, wikipedia_search
 from truthgpt.verify import VerificationResult, verify_claim
@@ -20,6 +21,7 @@ class PipelineOutput:
     sources: List[str]
     topic_title: str
     topic_query: str
+    used_fallback: bool
 
 
 def _merge_evidence(*lists: List[Evidence]) -> List[Evidence]:
@@ -41,10 +43,13 @@ def _topic_query_from_question(question: str) -> str:
     """
     q = (question or "").strip()
 
-    # remove common leading instructions
-    q = re.sub(r"^\s*(tell me about|explain|what is|who is|give me an overview of)\s+", "", q, flags=re.I)
+    q = re.sub(
+        r"^\s*(tell me about|explain|what is|who is|give me an overview of)\s+",
+        "",
+        q,
+        flags=re.I,
+    )
 
-    # remove trailing formatting instructions
     q = re.sub(r"\s+in\s+\d+\s*[-–]\s*\d+\s+bullet\s+points.*$", "", q, flags=re.I)
     q = re.sub(r"\s+in\s+\d+\s+bullet\s+points.*$", "", q, flags=re.I)
     q = re.sub(r"\s+in\s+bullet\s+points.*$", "", q, flags=re.I)
@@ -92,21 +97,30 @@ def run_pipeline(
     max_claims: int = 8,
     evidence_per_source: int = 3,
 ) -> PipelineOutput:
-    # 0) Topic detection (fixed)
+    # 0) Topic detection
     topic_query = _topic_query_from_question(question)
     topic_title = _detect_topic_title(topic_query)
     anchor = _anchor_terms(topic_title)
 
-    # 1) LLM generates an answer
-    answer = generate_answer(question)
-
-    # 2) Extract claims
-    claims = extract_claims(answer, max_claims=max_claims)
-
-    # 3) Base evidence about the topic
+    # 1) Gather base evidence FIRST (so fallback can use it)
     base_query = topic_title if topic_title else topic_query
     base_evidence_raw = gather_evidence(base_query, per_source=evidence_per_source)
     base_evidence = [e for e in base_evidence_raw if _is_relevant(e, anchor)]
+
+    # 2) Generate answer (Groq) OR fallback to evidence-only answer
+    used_fallback = False
+    try:
+        answer = generate_answer(question)
+    except Exception:
+        used_fallback = True
+        answer = fallback_answer_from_evidence(
+            base_evidence,
+            topic_title=topic_title,
+            max_bullets=6,
+        )
+
+    # 3) Extract claims
+    claims = extract_claims(answer, max_claims=max_claims)
 
     results: List[VerificationResult] = []
     sources_set: Set[str] = set()
@@ -145,4 +159,5 @@ def run_pipeline(
         sources=sorted(sources_set),
         topic_title=topic_title,
         topic_query=topic_query,
+        used_fallback=used_fallback,
     )
