@@ -40,9 +40,29 @@ def _merge_evidence(*lists: List[Evidence]) -> List[Evidence]:
 def _topic_query_from_question(question: str) -> str:
     """
     Heuristic: strip instruction words so Wikipedia search gets a clean topic query.
+    Also handle patterns like "who invented X" -> "X".
     """
     q = (question or "").strip()
+    q = re.sub(r"\s+", " ", q).strip()
 
+    # Special patterns: turn question into the actual topic
+    m = re.match(r"^\s*who\s+invented\s+(.+?)\s*\??$", q, flags=re.I)
+    if m:
+        q = m.group(1).strip()
+
+    m = re.match(r"^\s*who\s+discovered\s+(.+?)\s*\??$", q, flags=re.I)
+    if m:
+        q = m.group(1).strip()
+
+    m = re.match(r"^\s*who\s+founded\s+(.+?)\s*\??$", q, flags=re.I)
+    if m:
+        q = m.group(1).strip()
+
+    # Special case: searching "0" alone is too broad; add "number"
+    if q.strip() == "0":
+        q = "0 number"
+
+    # remove common leading instructions
     q = re.sub(
         r"^\s*(tell me about|explain|what is|who is|give me an overview of)\s+",
         "",
@@ -50,6 +70,7 @@ def _topic_query_from_question(question: str) -> str:
         flags=re.I,
     )
 
+    # remove trailing formatting instructions
     q = re.sub(r"\s+in\s+\d+\s*[-–]\s*\d+\s+bullet\s+points.*$", "", q, flags=re.I)
     q = re.sub(r"\s+in\s+\d+\s+bullet\s+points.*$", "", q, flags=re.I)
     q = re.sub(r"\s+in\s+bullet\s+points.*$", "", q, flags=re.I)
