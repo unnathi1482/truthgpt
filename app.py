@@ -1,6 +1,7 @@
 import streamlit as st
 
 from truthgpt.pipeline import run_pipeline
+from truthgpt.format_answer import format_answer_for_display
 
 st.set_page_config(page_title="TruthGPT", page_icon="✅", layout="centered")
 
@@ -20,11 +21,23 @@ if submitted:
         st.stop()
 
     with st.spinner("Generating answer and verifying claims..."):
-        out = run_pipeline(question, max_claims=6, evidence_per_source=3)
+        try:
+            out = run_pipeline(question, max_claims=6, evidence_per_source=3)
+        except Exception as e:
+            err_type = type(e).__name__
+
+            # Groq SDK error class names (handled by name to avoid extra imports)
+            if err_type in ("APIConnectionError", "APITimeoutError"):
+                st.error(
+                    "The LLM provider (Groq) is temporarily unreachable from the server. "
+                    "Please try again in a few seconds."
+                )
+            else:
+                st.error(f"Error: {err_type}: {e}")
+
+            st.stop()
 
     st.subheader("Answer")
-    
-    from truthgpt.format_answer import format_answer_for_display
     st.markdown(format_answer_for_display(out.answer))
 
     st.subheader("Verification summary")
@@ -51,7 +64,10 @@ if submitted:
                     label = "⚠️ UNVERIFIED"
                     color = "orange"
 
-                st.markdown(f"**<span style='color:{color}'>{label}</span>**", unsafe_allow_html=True)
+                st.markdown(
+                    f"**<span style='color:{color}'>{label}</span>**",
+                    unsafe_allow_html=True,
+                )
                 st.write(r.claim)
                 st.caption(f"Confidence: `{r.confidence:.3f}`")
 
@@ -70,4 +86,3 @@ if submitted:
             st.caption(f"...and {len(out.sources) - 10} more.")
     else:
         st.write("No sources collected.")
-        
